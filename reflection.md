@@ -4,13 +4,23 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+My initial UML design has four classes: Owner, Pet, Task, and Scheduler.
+
+Owner: Stores the owner's name, how many minutes they have available in the day, their preferences, and a list of their pets. It can add a pet and gather up all the tasks from every pet.
+
+Pet: Stores basic information about the pet, such as its name and species, and keeps track of its tasks. It can add or remove a task.
+
+Task: Stores one pet care activity like a walk, feeding, or grooming, along with how long it takes and its priority (low, medium, or high). It has a priority_rank() method that turns the priority into a number so tasks can be sorted.
+
+Scheduler: Takes the owner and organizes their tasks into a daily schedule based on the owner's available time and task priorities. It can also explain why it picked the tasks it did.
+
+For the relationships, an owner can have many pets, each pet can have many tasks, and the scheduler goes through the owner to get to the tasks. I chose these classes because they cover everything that is needed without making it too complicated.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Yes, a little. When I compared my skeleton code to my UML, I noticed that once Owner.get_all_tasks() puts every pet's tasks into one list, there's no way to tell which pet a task belongs to. If I had two pets, the plan might just say "Feeding" twice and the explanation couldn't say whose it was. To fix this, I added a pet_name attribute to Task, and Pet.add_task() will fill it in when a task gets added. I used just the pet's name instead of the whole Pet object because a Pet already holds its tasks, so if each task also held its pet, printing either one would loop forever.
+
+I also made Pet and Task dataclasses since they mostly just hold data, and kept Owner and Scheduler as regular classes. For the pet's task list I used field(default_factory=list) so each pet gets its own list instead of all pets sharing the same one.
 
 ---
 

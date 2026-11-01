@@ -14,6 +14,7 @@ class Task:
     title: str
     duration_minutes: int
     priority: str  # "low", "medium", or "high"
+    pet_name: str = ""  # filled in by Pet.add_task so the plan shows whose task it is
 
     def priority_rank(self) -> int:
         """Return a number for the priority so tasks can be sorted."""
@@ -29,7 +30,7 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
-        """Add a care task for this pet."""
+        """Add a care task for this pet and set the task's pet_name."""
         pass
 
     def remove_task(self, title: str) -> None:
