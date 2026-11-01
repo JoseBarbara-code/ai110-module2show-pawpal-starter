@@ -564,3 +564,70 @@ def test_explain_plan_mentions_chosen_and_skipped_tasks():
     assert "Skipped because there wasn't enough time left:" in explanation
     assert "- Bath (Mochi) - 40 min, medium priority" in explanation
     assert "3." not in explanation  # Bath is only listed as skipped, not as part of the plan
+
+
+# --- Editing tasks ---
+
+
+def test_edit_task_changes_details_in_place():
+    pet = Pet("Mochi", "dog")
+    breakfast = Task("Breakfast", 10, "high", time="07:00")
+    other_breakfast = Task("Breakfast", 10, "high", time="07:00")  # same title on purpose
+    pet.add_task(breakfast)
+    pet.add_task(other_breakfast)
+    breakfast.mark_complete()
+    new_date = date.today() + timedelta(days=2)
+
+    breakfast.edit(title="Big breakfast", duration_minutes=15, priority="medium",
+                   time="8:15", due_date=new_date, frequency="Weekly")
+
+    # Same object and no new tasks, so nothing was duplicated.
+    assert pet.tasks[0] is breakfast
+    assert len(pet.tasks) == 2
+    assert (breakfast.title, breakfast.duration_minutes, breakfast.priority) == ("Big breakfast", 15, "medium")
+    # The time and frequency go through the usual clean-up ("8:15" -> "08:15", "Weekly" -> "weekly").
+    assert (breakfast.time, breakfast.due_date, breakfast.frequency) == ("08:15", new_date, "weekly")
+    # The pet and the completion status are kept.
+    assert breakfast.pet_name == "Mochi"
+    assert breakfast.completed is True
+    # The other task with the same title wasn't touched.
+    assert (other_breakfast.title, other_breakfast.time, other_breakfast.completed) == ("Breakfast", "07:00", False)
+
+
+def test_edit_task_with_invalid_input_changes_nothing():
+    walk = Task("Morning walk", 30, "high", frequency="daily", time="07:30")
+    before = (walk.title, walk.duration_minutes, walk.priority, walk.time, walk.due_date, walk.frequency)
+
+    for bad_time, bad_frequency in [("25:00", "daily"), ("07:30", "monthly")]:
+        with pytest.raises(ValueError):
+            walk.edit(title="Evening walk", duration_minutes=45, priority="low",
+                      time=bad_time, due_date=walk.due_date, frequency=bad_frequency)
+
+    after = (walk.title, walk.duration_minutes, walk.priority, walk.time, walk.due_date, walk.frequency)
+    assert after == before  # nothing was half-saved
+
+
+def test_scheduler_uses_edited_task_values():
+    owner, mochi, luna = make_mochi_and_luna()
+    walk = Task("Morning walk", 30, "high", time="07:30")
+    medicine = Task("Medicine", 5, "high", time="08:00", frequency="once")
+    mochi.add_task(walk)
+    luna.add_task(medicine)
+    scheduler = Scheduler(owner)
+    assert scheduler.find_conflicts() == []
+
+    # Moving Medicine to 07:30 creates a conflict with the walk.
+    medicine.edit(title="Medicine", duration_minutes=5, priority="high", time="07:30",
+                  due_date=medicine.due_date, frequency="once")
+    assert len(scheduler.find_conflicts()) == 1
+
+    # Moving the walk to tomorrow takes it out of today's plan and clears the conflict.
+    tomorrow = walk.due_date + timedelta(days=1)
+    walk.edit(title="Morning walk", duration_minutes=30, priority="high", time="07:30",
+              due_date=tomorrow, frequency="weekly")
+    assert [task.title for task in scheduler.generate_plan()] == ["Medicine"]
+    assert scheduler.find_conflicts() == []
+
+    # The edited frequency is used when the task is completed: weekly means 7 days later.
+    next_walk = mochi.complete_task(walk)
+    assert next_walk.due_date == tomorrow + timedelta(days=7)

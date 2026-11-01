@@ -61,6 +61,20 @@ class Task:
         """Mark this task as done (use Pet.complete_task() so repeating tasks get their next copy)."""
         self.completed = True
 
+    def edit(self, title: str, duration_minutes: int, priority: str, time: str,
+             due_date: date, frequency: str) -> None:
+        """Change this task's details, keeping its pet and completion status (ValueError if invalid)."""
+        # Build a temporary Task first so the usual time and frequency checks run.
+        # If anything is invalid, ValueError is raised and this task stays unchanged.
+        checked = Task(title, duration_minutes, priority, frequency=frequency,
+                       time=time, due_date=due_date)
+        self.title = checked.title
+        self.duration_minutes = checked.duration_minutes
+        self.priority = checked.priority
+        self.frequency = checked.frequency
+        self.time = checked.time
+        self.due_date = checked.due_date
+
     def next_occurrence(self, completed_on: date | None = None) -> "Task | None":
         """Return a new, not-done copy of this task for its next due date (None for 'once' tasks)."""
         if completed_on is None:

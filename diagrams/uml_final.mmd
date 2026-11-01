@@ -1,0 +1,59 @@
+classDiagram
+    %% PawPal+ final class design (Phase 6)
+    %% Owner has pets, each Pet has care tasks, and the Scheduler
+    %% builds a daily plan from the owner's tasks and available time.
+    %% Parameters written as "= None" are optional; None means "use the default".
+
+    class Owner {
+        +str name
+        +int available_minutes
+        +list~str~ preferences
+        +list~Pet~ pets
+        +add_pet(pet: Pet) None
+        +get_all_tasks() list~Task~
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +list~Task~ tasks
+        +add_task(task: Task) None
+        +remove_task(title: str) None
+        +complete_task(task: Task, completed_on: date = None) Optional~Task~
+    }
+
+    class Task {
+        +str title
+        +int duration_minutes
+        +str priority
+        +str pet_name
+        +str frequency
+        +bool completed
+        +str time
+        +date due_date
+        +priority_rank() int
+        +mark_complete() None
+        +edit(title: str, duration_minutes: int, priority: str, time: str, due_date: date, frequency: str) None
+        +next_occurrence(completed_on: date = None) Optional~Task~
+        +describe() str
+    }
+
+    class Scheduler {
+        +Owner owner
+        +list~Task~ skipped_tasks
+        +sort_by_priority(tasks: list~Task~) list~Task~
+        +sort_by_time(tasks: list~Task~) list~Task~
+        +filter_tasks(pet_name: str = None, completed: bool = None) list~Task~
+        +find_conflicts(tasks: list~Task~ = None) list~str~
+        +generate_plan() list~Task~
+        +explain_plan(plan: list~Task~) str
+    }
+
+    Owner "1" o-- "0..*" Pet : owns
+    Pet "1" *-- "0..*" Task : needs
+    Scheduler --> Owner : plans for
+    Scheduler ..> Task : sorts, filters, checks
+
+    note for Task "time is HH:MM, or empty for anytime<br>frequency is daily, weekly, or once<br>both are checked when a Task is created"
+    note for Pet "complete_task() marks a task done and adds<br>its next_occurrence() for daily/weekly tasks"
+    note for Scheduler "priority picks tasks that fit available_minutes<br>sort_by_time() only orders them<br>find_conflicts() checks identical date + start time"
