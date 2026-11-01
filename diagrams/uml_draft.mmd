@@ -1,7 +1,9 @@
 classDiagram
-    %% PawPal+ class design (updated in Phase 2 with the logic layer)
+    %% PawPal+ class design (final, after Phase 4)
     %% Owner has pets, each Pet has care tasks, and the Scheduler
     %% builds a daily plan from the owner's tasks and available time.
+    %% Task checks its time ("HH:MM") and frequency when it is created.
+    %% next_occurrence() returns a new Task for daily/weekly tasks, or None for "once".
 
     class Owner {
         +str name
@@ -18,6 +20,7 @@ classDiagram
         +list~Task~ tasks
         +add_task(task: Task) None
         +remove_task(title: str) None
+        +complete_task(task: Task, completed_on: date) Optional~Task~
     }
 
     class Task {
@@ -27,8 +30,11 @@ classDiagram
         +str pet_name
         +str frequency
         +bool completed
+        +str time
+        +date due_date
         +priority_rank() int
         +mark_complete() None
+        +next_occurrence(completed_on: date) Optional~Task~
         +describe() str
     }
 
@@ -36,6 +42,9 @@ classDiagram
         +Owner owner
         +list~Task~ skipped_tasks
         +sort_by_priority(tasks: list~Task~) list~Task~
+        +sort_by_time(tasks: list~Task~) list~Task~
+        +filter_tasks(pet_name: str, completed: bool) list~Task~
+        +find_conflicts(tasks: list~Task~) list~str~
         +generate_plan() list~Task~
         +explain_plan(plan: list~Task~) str
     }
@@ -43,4 +52,4 @@ classDiagram
     Owner "1" o-- "0..*" Pet : owns
     Pet "1" *-- "0..*" Task : needs
     Scheduler --> Owner : plans for
-    Scheduler ..> Task : orders
+    Scheduler ..> Task : sorts, filters, checks

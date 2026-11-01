@@ -28,24 +28,26 @@ I also made Pet and Task dataclasses since they mostly just hold data, and kept 
 
 **a. Constraints and priorities**
 
-My scheduler looks at four things:
+My scheduler looks at these things:
 
 - Available time: the owner's available_minutes is a hard limit. The total time of the planned tasks never goes over it.
 - Priority: tasks are sorted high, then medium, then low. priority_rank() turns these into 3, 2, and 1 so they can be sorted.
 - Duration: when two tasks have the same priority, the shorter one goes first so more tasks can fit.
 - Completion: tasks that are already marked complete are left out of the plan.
+- Due date: every task has a due_date. The plan only includes tasks due today or earlier, so a task I missed yesterday still shows up, but tomorrow's tasks wait for their own day.
+- Scheduled time: a task can have a time like "07:30", or no time if it can be done anytime. The time doesn't change which tasks get picked. sort_by_time() puts the chosen tasks in order for the day, and find_conflicts() uses the time to warn me about two tasks at the same time.
 
-Owner preferences and task frequency (daily or weekly) are stored, but the scheduler doesn't use them yet. It also doesn't give tasks a time of day yet, so the plan is just an order.
+Daily and weekly recurrence works now too. When I finish a task with Pet.complete_task(), it adds a new copy for the next day (daily) or a week later (weekly), and "once" tasks don't repeat. Owner preferences are still stored, but the scheduler doesn't use them.
 
 I decided time mattered most because the owner can't do more than they have time for, so the plan has to fit no matter what. After that, priority made the most sense because things like feeding and walks are more important than play time. Duration is only used as a tiebreaker.
 
 **b. Tradeoffs**
 
-My scheduler is greedy. It goes down the sorted list once and takes each task that fits in the time left. It doesn't try every combination to find the one that uses the most time. You can see this in my demo: after the high-priority tasks there were 15 minutes left. The scheduler picked Brush fur (medium, 10 min) and then couldn't fit either of the 15-minute low-priority tasks, so 5 minutes went unused. Picking a low-priority task instead would have used all 60 minutes, but then a medium task would have been skipped for a low one.
+The biggest tradeoff is in my conflict detection. find_conflicts() only warns when two tasks are at the exact same date and time. It doesn't look at how long the tasks take, so it can miss overlaps. In my demo, Mochi's Morning walk starts at 07:30 and lasts 30 minutes, and Training starts at 07:45. Those really do overlap, but there's no warning because the start times are different. Checking for overlaps would mean figuring out each task's end time and comparing tasks against each other, which is more code and more places for bugs. I think exact matches are a reasonable start for this project because they catch the most obvious mistake (two things booked at the same time), and the check is easy to understand and test. The warning also doesn't move or drop anything, so the owner still decides what to do about it.
 
-Another side effect is that when a long task doesn't fit, the scheduler keeps going, so a shorter, lower-priority task can still get in. In one of my tests, Bath (medium, 40 min) gets skipped but Brush fur (low, 10 min) still gets scheduled.
+The plan itself is also greedy. It goes through the tasks once from highest to lowest priority and takes each one that fits in the time left, instead of trying every combination to use the most time. In my demo, after the high-priority tasks there were 15 minutes left. It picked Brush fur (medium, 10 min), and then neither 15-minute low-priority task fit, so 5 minutes went unused. A low-priority task would have filled the time exactly, but then a medium task would have been skipped for a low one. I'm okay with that because getting the important tasks done matters more than using every minute.
 
-I think this is reasonable for a pet owner because getting the important tasks done matters more than filling every minute. The rules are also simple, so the plan is easy to understand and explain.
+One thing I had to keep straight is that priority and time do different jobs. Priority decides which tasks make it into the plan, and sort_by_time() only changes the order they're shown in. So giving a task an early time doesn't help it get picked, and the plan doesn't check whether two chosen tasks clash. That's what the separate conflict warning is for.
 
 ---
 
@@ -67,30 +69,31 @@ I think this is reasonable for a pet owner because getting the important tasks d
 
 **a. What you tested**
 
-I wrote 6 pytest tests in tests/test_pawpal.py:
+I have 36 pytest tests in tests/test_pawpal.py, and all of them pass. They're grouped by feature:
 
-1. mark_complete() changes a task's completed value from False to True.
-2. Pet.add_task() increases the number of tasks the pet has.
-3. High-priority tasks come before medium and low ones in the plan. I added them in the opposite order so the scheduler actually had to sort them.
-4. The plan never goes over the owner's available time, and a shorter task can still fit after a longer one is skipped.
-5. Completed tasks are left out of the plan.
-6. Owner.get_all_tasks() collects tasks from more than one pet, and each task has the right pet_name.
+- Basic scheduling (6 tests): mark_complete() and add_task() work, high-priority tasks come first, the plan never goes over the available time, completed tasks are left out, and tasks from more than one pet get collected with the right pet_name.
+- Sorting and times (6 tests): sort_by_time() puts tasks in time order with anytime tasks last and earlier dates first, a time like "8:05" gets stored as "08:05", bad times like "25:00" raise an error, and adding times doesn't change the priority-based plan.
+- Filtering (4 tests): filtering by pet name, by done or not done, by both, and with no filters at all.
+- Recurring tasks (12 tests): daily tasks come back 1 day later and weekly tasks 7 days later (even across the end of a month and year), "once" tasks don't repeat, complete_task() adds the next copy to the pet, completing the same task twice doesn't make a duplicate, late and early completion get the right next date, a bad frequency raises an error, and future tasks stay out of today's plan.
+- Conflict detection (8 tests): two tasks at the same time for the same pet or for different pets, three tasks at one time giving one warning, no false warnings for different times, different dates, tasks without a time, or completed tasks, and checking just a list of tasks I pass in.
 
-All 6 tests pass. I also ran main.py and checked the schedule by hand to make sure the order and the time left were right.
+Most of the recurrence tests use fixed dates like date(2026, 11, 1) and pass in the completion date, so they give the same result no matter what day I run them. The few that check today's plan use dates relative to today, since the plan is always for today. I also ran main.py and checked the output by hand.
 
-These tests are important because they cover the main things the scheduler is supposed to do: put the most important tasks first, fit in the owner's time, not repeat finished tasks, and not mix up tasks from different pets. While setting up the tests, running plain `pytest` couldn't find pawpal_system.py because the tests are in a subfolder, so I added a small pytest.ini that tells pytest to look in the project folder.
+These tests are important because each one checks a promise the scheduler makes, like fitting in the owner's time, not repeating finished work, and not missing or making up conflicts. The date tests matter a lot because date bugs are easy to miss if you only ever run things on one day. While setting up the tests, running plain `pytest` couldn't find pawpal_system.py because the tests are in a subfolder, so I added a small pytest.ini that tells pytest to look in the project folder.
 
 **b. Confidence**
 
-I'm fairly confident it works for the cases I tested, since all 6 tests pass and the demo output matched what I worked out by hand. But I only have 6 tests and they use small, simple examples, so I wouldn't say it's fully proven yet.
+I'm pretty confident in the scheduling logic now. All 36 tests pass, they cover every Phase 4 feature, and the main.py output matched what I worked out by hand. I'm less sure about the Streamlit app, because my tests only cover pawpal_system.py and not app.py, and the app doesn't use the new Phase 4 features yet.
+
+There's also a limit I already know about: find_conflicts() only catches tasks with the exact same start time, so overlapping tasks (like a 30-minute walk at 07:30 and training at 07:45) don't get a warning.
 
 If I had more time, I would test:
 
 - An owner with 0 available minutes, or with no pets or tasks
-- A task that uses up exactly the time that's left
 - Priorities typed differently, like "High" or a typo (right now a typo gets ranked below low instead of causing an error)
-- Removing a task when two tasks have the same title (remove_task only removes the first one)
+- remove_task() when a pet has both an old completed copy and a new copy of the same recurring task (it removes the first one it finds)
 - The text that explain_plan() returns
+- The Streamlit app itself
 
 ---
 

@@ -5,9 +5,27 @@ and the Scheduler builds a daily plan from the owner's tasks and available time.
 """
 
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 
 # Higher number = more important. Used to sort tasks.
 PRIORITY_RANKS = {"low": 1, "medium": 2, "high": 3}
+
+# How often a task repeats. "once" tasks don't repeat.
+FREQUENCIES = ["daily", "weekly", "once"]
+
+
+def normalize_time(time_text: str) -> str:
+    """Return a time as 24-hour 'HH:MM' (so '8:05' becomes '08:05'); '' means anytime."""
+    time_text = time_text.strip()
+    if time_text == "":
+        return ""
+    try:
+        parsed = datetime.strptime(time_text, "%H:%M")
+    except ValueError:
+        raise ValueError(
+            f"Time must be 24-hour HH:MM, like '08:00' or '14:30' (got {time_text!r})."
+        )
+    return parsed.strftime("%H:%M")
 
 
 @dataclass
@@ -18,8 +36,21 @@ class Task:
     duration_minutes: int
     priority: str  # "low", "medium", or "high"
     pet_name: str = ""  # filled in by Pet.add_task so the plan shows whose task it is
-    frequency: str = "daily"  # "daily" or "weekly"
+    frequency: str = "daily"  # "daily", "weekly", or "once"
     completed: bool = False
+    time: str = ""  # scheduled time as 24-hour "HH:MM"; "" means anytime
+    due_date: date = field(default_factory=date.today)  # the day this task is due
+
+    def __post_init__(self) -> None:
+        """Check the time and frequency when the task is created."""
+        # Zero-padded times like "08:00" sort correctly as text; "8:00" would not.
+        self.time = normalize_time(self.time)
+
+        self.frequency = self.frequency.strip().lower()
+        if self.frequency not in FREQUENCIES:
+            raise ValueError(
+                f"Frequency must be 'daily', 'weekly', or 'once' (got {self.frequency!r})."
+            )
 
     def priority_rank(self) -> int:
         """Return a number for the priority so tasks can be sorted."""
@@ -27,8 +58,34 @@ class Task:
         return PRIORITY_RANKS.get(self.priority.lower(), 0)
 
     def mark_complete(self) -> None:
-        """Mark this task as done."""
+        """Mark this task as done (use Pet.complete_task() so repeating tasks get their next copy)."""
         self.completed = True
+
+    def next_occurrence(self, completed_on: date | None = None) -> "Task | None":
+        """Return a new, not-done copy of this task for its next due date (None for 'once' tasks)."""
+        if completed_on is None:
+            completed_on = date.today()
+        # Count from the due date or the day it was completed, whichever is later.
+        # On time or early, the schedule stays the same; late, it starts again from the completion day.
+        start_date = max(self.due_date, completed_on)
+
+        if self.frequency == "daily":
+            next_due_date = start_date + timedelta(days=1)
+        elif self.frequency == "weekly":
+            next_due_date = start_date + timedelta(days=7)
+        else:
+            return None  # "once" tasks don't repeat
+
+        return Task(
+            title=self.title,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            pet_name=self.pet_name,
+            frequency=self.frequency,
+            completed=False,
+            time=self.time,
+            due_date=next_due_date,
+        )
 
     def describe(self) -> str:
         """Return a short one-line description, like 'Walk (Mochi) - 30 min, high priority'."""
@@ -55,6 +112,21 @@ class Pet:
             if task.title == title:
                 self.tasks.remove(task)
                 return
+
+    def complete_task(self, task: Task, completed_on: date | None = None) -> Task | None:
+        """Mark a task done and add its next occurrence; return the new task (or None)."""
+        # Always finish tasks through this method, not Task.mark_complete() directly.
+        # Calling mark_complete() alone skips the next occurrence, and afterwards this
+        # method sees the task as already done and won't add one either.
+        if task.completed:
+            # Already done, so its next occurrence was already added. Don't add another.
+            return None
+
+        task.mark_complete()
+        next_task = task.next_occurrence(completed_on)
+        if next_task is not None:
+            self.add_task(next_task)
+        return next_task
 
 
 class Owner:
@@ -91,10 +163,51 @@ class Scheduler:
         """Return tasks from highest to lowest priority, shorter tasks first when tied."""
         return sorted(tasks, key=lambda task: (-task.priority_rank(), task.duration_minutes))
 
+    def sort_by_time(self, tasks: list[Task]) -> list[Task]:
+        """Return tasks from earliest to latest (by date, then time), with anytime tasks last each day."""
+        # (task.time == "") is False for timed tasks and True for anytime tasks.
+        # False sorts before True, so anytime tasks end up at the end of their day.
+        return sorted(tasks, key=lambda task: (task.due_date, task.time == "", task.time))
+
+    def filter_tasks(self, pet_name: str | None = None, completed: bool | None = None) -> list[Task]:
+        """Return the owner's tasks for one pet, one completion status, or both (None means any)."""
+        tasks = self.owner.get_all_tasks()
+        if pet_name is not None:
+            tasks = [task for task in tasks if task.pet_name == pet_name]
+        if completed is not None:
+            tasks = [task for task in tasks if task.completed == completed]
+        return tasks
+
+    def find_conflicts(self, tasks: list[Task] | None = None) -> list[str]:
+        """Return a warning for each date and time that has 2 or more tasks (empty list if none)."""
+        if tasks is None:
+            tasks = self.owner.get_all_tasks()
+
+        # Group tasks by their (date, time) slot. Sorting first keeps the warnings in order.
+        tasks_by_slot = {}
+        for task in self.sort_by_time(tasks):
+            if task.completed or task.time == "":
+                continue  # done tasks and anytime tasks can't clash with anything
+            slot = (task.due_date, task.time)
+            if slot not in tasks_by_slot:
+                tasks_by_slot[slot] = []
+            tasks_by_slot[slot].append(task)
+
+        # Any slot holding more than one task is a conflict.
+        warnings = []
+        for (due_date, time), slot_tasks in tasks_by_slot.items():
+            if len(slot_tasks) > 1:
+                names = ", ".join(f"{task.title} ({task.pet_name or 'no pet'})" for task in slot_tasks)
+                warnings.append(f"Conflict at {time} on {due_date}: {names}")
+        return warnings
+
     def generate_plan(self) -> list[Task]:
         """Choose and order tasks that fit in the owner's available time."""
-        # Completed tasks are already done, so they don't need a spot in today's plan.
-        to_do = [task for task in self.owner.get_all_tasks() if not task.completed]
+        # Only plan tasks that aren't done yet and are due today or earlier.
+        # Future tasks (like tomorrow's copy of a daily task) wait for their own day,
+        # while a missed task from an earlier day still shows up.
+        today = date.today()
+        to_do = [task for task in self.filter_tasks(completed=False) if task.due_date <= today]
 
         plan = []
         self.skipped_tasks = []
