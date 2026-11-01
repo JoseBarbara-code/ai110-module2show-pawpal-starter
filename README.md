@@ -135,60 +135,78 @@ Conflict check:
 
 ## 🧪 Testing PawPal+
 
+Run the tests from the project folder:
+
 ```bash
-# Run the full test suite:
-pytest           # or: py -m pytest
-
-# Run with coverage (needs `pip install pytest-cov`, which is not in requirements.txt):
-pytest --cov
+python -m pytest       # on Windows without a virtual environment: py -m pytest
+python -m pytest -v    # same, but lists every test by name
 ```
 
-Sample test output from `py -m pytest -v` (header lines with local folder paths left out):
+Coverage (`pytest --cov`) needs `pip install pytest-cov`, which is not in `requirements.txt`.
+
+**What the 42 tests cover** (all in `tests/test_pawpal.py`, testing the backend in `pawpal_system.py`):
+
+- **Basic scheduling (6):** completing and adding tasks, higher priority first, the plan never going over the available time, completed tasks left out, and tasks collected from several pets.
+- **Sorting and time formats (6):** time order with "anytime" tasks last and earlier dates first, `"8:05"` stored as `"08:05"`, invalid times rejected, and times not changing the priority-based plan.
+- **Filtering (4):** by pet name, by completion status, by both, and with no filters.
+- **Recurring tasks (12):** daily +1 day, weekly +7 days (including month and year rollover), "once" tasks not repeating, no duplicate copies, late and early completion, and future copies kept out of today's plan.
+- **Conflict detection (8):** same time for the same pet or different pets, three tasks in one slot, and no false warnings for different times, different dates, tasks without a time, or completed tasks.
+- **Edge cases (6):** an owner with no pets or a pet with no tasks, nothing fitting in the available time, same-priority tasks going shortest first, unpadded times like `"9:00"` sorting correctly, the same time typed two ways (`"8:00"` / `"08:00"`) still conflicting, and the `explain_plan()` text.
+
+Most recurrence tests use fixed dates, and the few that check today's plan use dates relative to today, so the suite gives the same result on any day.
+
+**Confidence level: ★★★★☆ (4/5).** All 42 backend tests pass, including the edge cases above. It isn't 5/5 because the Streamlit UI (`app.py`) has no automated tests, and conflict detection only checks identical start times, so overlapping durations (for example, a 30-minute task at 07:30 and another at 07:45) aren't flagged.
+
+Actual output from `py -m pytest -v` (header lines with local folder paths left out):
 
 ```
-collected 36 items
+collected 42 items
 
 tests/test_pawpal.py::test_mark_complete_changes_status PASSED           [  2%]
-tests/test_pawpal.py::test_add_task_increases_pet_task_count PASSED      [  5%]
-tests/test_pawpal.py::test_high_priority_tasks_come_first PASSED         [  8%]
-tests/test_pawpal.py::test_plan_fits_in_available_time PASSED            [ 11%]
-tests/test_pawpal.py::test_completed_tasks_are_not_scheduled PASSED      [ 13%]
-tests/test_pawpal.py::test_get_all_tasks_collects_from_every_pet PASSED  [ 16%]
-tests/test_pawpal.py::test_sort_by_time_orders_earliest_first PASSED     [ 19%]
-tests/test_pawpal.py::test_sort_by_time_puts_anytime_tasks_last PASSED   [ 22%]
-tests/test_pawpal.py::test_time_is_normalized_to_hh_mm PASSED            [ 25%]
-tests/test_pawpal.py::test_invalid_time_raises_error PASSED              [ 27%]
-tests/test_pawpal.py::test_times_do_not_change_priority_based_plan PASSED [ 30%]
-tests/test_pawpal.py::test_filter_tasks_by_pet_name PASSED               [ 33%]
-tests/test_pawpal.py::test_filter_tasks_by_completion_status PASSED      [ 36%]
-tests/test_pawpal.py::test_filter_tasks_by_pet_and_status PASSED         [ 38%]
-tests/test_pawpal.py::test_filter_tasks_with_no_filters_returns_everything PASSED [ 41%]
-tests/test_pawpal.py::test_daily_task_next_occurrence_is_one_day_later PASSED [ 44%]
-tests/test_pawpal.py::test_weekly_task_next_occurrence_is_seven_days_later PASSED [ 47%]
-tests/test_pawpal.py::test_next_occurrence_crosses_month_and_year PASSED [ 50%]
-tests/test_pawpal.py::test_once_task_does_not_repeat PASSED              [ 52%]
-tests/test_pawpal.py::test_complete_task_adds_next_occurrence_to_pet PASSED [ 55%]
-tests/test_pawpal.py::test_completing_a_task_twice_does_not_duplicate PASSED [ 58%]
-tests/test_pawpal.py::test_late_completion_counts_from_completion_date PASSED [ 61%]
-tests/test_pawpal.py::test_early_completion_keeps_the_schedule PASSED    [ 63%]
-tests/test_pawpal.py::test_late_completed_task_next_copy_is_not_overdue PASSED [ 66%]
-tests/test_pawpal.py::test_frequency_is_checked PASSED                   [ 69%]
-tests/test_pawpal.py::test_future_tasks_are_not_in_todays_plan PASSED    [ 72%]
-tests/test_pawpal.py::test_completed_daily_task_next_copy_waits_for_tomorrow PASSED [ 75%]
-tests/test_pawpal.py::test_sort_by_time_puts_earlier_days_first PASSED   [ 77%]
-tests/test_pawpal.py::test_two_tasks_at_same_time_conflict PASSED        [ 80%]
-tests/test_pawpal.py::test_conflict_between_different_pets PASSED        [ 83%]
-tests/test_pawpal.py::test_three_tasks_in_one_slot_give_one_warning PASSED [ 86%]
-tests/test_pawpal.py::test_different_times_do_not_conflict PASSED        [ 88%]
-tests/test_pawpal.py::test_same_time_on_different_dates_does_not_conflict PASSED [ 91%]
-tests/test_pawpal.py::test_tasks_without_a_time_do_not_conflict PASSED   [ 94%]
-tests/test_pawpal.py::test_completed_tasks_are_not_conflicts PASSED      [ 97%]
-tests/test_pawpal.py::test_find_conflicts_can_check_a_given_list PASSED  [100%]
+tests/test_pawpal.py::test_add_task_increases_pet_task_count PASSED      [  4%]
+tests/test_pawpal.py::test_high_priority_tasks_come_first PASSED         [  7%]
+tests/test_pawpal.py::test_plan_fits_in_available_time PASSED            [  9%]
+tests/test_pawpal.py::test_completed_tasks_are_not_scheduled PASSED      [ 11%]
+tests/test_pawpal.py::test_get_all_tasks_collects_from_every_pet PASSED  [ 14%]
+tests/test_pawpal.py::test_sort_by_time_orders_earliest_first PASSED     [ 16%]
+tests/test_pawpal.py::test_sort_by_time_puts_anytime_tasks_last PASSED   [ 19%]
+tests/test_pawpal.py::test_time_is_normalized_to_hh_mm PASSED            [ 21%]
+tests/test_pawpal.py::test_invalid_time_raises_error PASSED              [ 23%]
+tests/test_pawpal.py::test_times_do_not_change_priority_based_plan PASSED [ 26%]
+tests/test_pawpal.py::test_filter_tasks_by_pet_name PASSED               [ 28%]
+tests/test_pawpal.py::test_filter_tasks_by_completion_status PASSED      [ 30%]
+tests/test_pawpal.py::test_filter_tasks_by_pet_and_status PASSED         [ 33%]
+tests/test_pawpal.py::test_filter_tasks_with_no_filters_returns_everything PASSED [ 35%]
+tests/test_pawpal.py::test_daily_task_next_occurrence_is_one_day_later PASSED [ 38%]
+tests/test_pawpal.py::test_weekly_task_next_occurrence_is_seven_days_later PASSED [ 40%]
+tests/test_pawpal.py::test_next_occurrence_crosses_month_and_year PASSED [ 42%]
+tests/test_pawpal.py::test_once_task_does_not_repeat PASSED              [ 45%]
+tests/test_pawpal.py::test_complete_task_adds_next_occurrence_to_pet PASSED [ 47%]
+tests/test_pawpal.py::test_completing_a_task_twice_does_not_duplicate PASSED [ 50%]
+tests/test_pawpal.py::test_late_completion_counts_from_completion_date PASSED [ 52%]
+tests/test_pawpal.py::test_early_completion_keeps_the_schedule PASSED    [ 54%]
+tests/test_pawpal.py::test_late_completed_task_next_copy_is_not_overdue PASSED [ 57%]
+tests/test_pawpal.py::test_frequency_is_checked PASSED                   [ 59%]
+tests/test_pawpal.py::test_future_tasks_are_not_in_todays_plan PASSED    [ 61%]
+tests/test_pawpal.py::test_completed_daily_task_next_copy_waits_for_tomorrow PASSED [ 64%]
+tests/test_pawpal.py::test_sort_by_time_puts_earlier_days_first PASSED   [ 66%]
+tests/test_pawpal.py::test_two_tasks_at_same_time_conflict PASSED        [ 69%]
+tests/test_pawpal.py::test_conflict_between_different_pets PASSED        [ 71%]
+tests/test_pawpal.py::test_three_tasks_in_one_slot_give_one_warning PASSED [ 73%]
+tests/test_pawpal.py::test_different_times_do_not_conflict PASSED        [ 76%]
+tests/test_pawpal.py::test_same_time_on_different_dates_does_not_conflict PASSED [ 78%]
+tests/test_pawpal.py::test_tasks_without_a_time_do_not_conflict PASSED   [ 80%]
+tests/test_pawpal.py::test_completed_tasks_are_not_conflicts PASSED      [ 83%]
+tests/test_pawpal.py::test_find_conflicts_can_check_a_given_list PASSED  [ 85%]
+tests/test_pawpal.py::test_empty_schedule_with_no_pets_or_no_tasks PASSED [ 88%]
+tests/test_pawpal.py::test_nothing_fits_in_available_time PASSED         [ 90%]
+tests/test_pawpal.py::test_same_priority_shorter_task_goes_first PASSED  [ 92%]
+tests/test_pawpal.py::test_sort_by_time_with_unpadded_times PASSED       [ 95%]
+tests/test_pawpal.py::test_same_time_typed_differently_still_conflicts PASSED [ 97%]
+tests/test_pawpal.py::test_explain_plan_mentions_chosen_and_skipped_tasks PASSED [100%]
 
-============================= 36 passed in 0.06s ==============================
+============================= 42 passed in 0.06s ==============================
 ```
-
-The 36 tests cover basic scheduling (6), sorting and time formats (6), filtering (4), recurring tasks (12), and conflict detection (8). Most recurrence tests use fixed dates, and the few that check today's plan use dates relative to today, so the suite gives the same result on any day.
 
 ## 📐 Smarter Scheduling
 

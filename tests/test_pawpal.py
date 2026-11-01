@@ -204,7 +204,9 @@ def test_filter_tasks_with_no_filters_returns_everything():
 
 
 # --- Recurring tasks ---
-# These use fixed dates so they pass no matter what day the tests run.
+# Most of these use fixed dates (and pass a completed_on date) so they give the same
+# result on any day. The few that check today's plan use dates relative to
+# date.today() instead, because the plan is always for today.
 
 
 def test_daily_task_next_occurrence_is_one_day_later():
@@ -460,3 +462,105 @@ def test_find_conflicts_can_check_a_given_list():
 
     assert scheduler.find_conflicts([walk, training]) == []
     assert len(scheduler.find_conflicts([walk, medicine])) == 1
+
+
+# --- Edge cases ---
+# These use the default due date (today) instead of fixed dates, so they never go stale.
+
+
+def test_empty_schedule_with_no_pets_or_no_tasks():
+    owner_with_no_pets = Owner("Jordan", available_minutes=60)
+    owner_with_empty_pet = Owner("Sam", available_minutes=60)
+    owner_with_empty_pet.add_pet(Pet("Mochi", "dog"))  # a pet with no tasks yet
+
+    for owner in [owner_with_no_pets, owner_with_empty_pet]:
+        scheduler = Scheduler(owner)
+        plan = scheduler.generate_plan()
+
+        assert owner.get_all_tasks() == []
+        assert plan == []
+        assert scheduler.skipped_tasks == []
+        assert scheduler.find_conflicts() == []
+        assert scheduler.explain_plan(plan) == "No tasks to schedule."
+
+
+def test_nothing_fits_in_available_time():
+    owner = Owner("Jordan", available_minutes=5)
+    pet = Pet("Mochi", "dog")
+    owner.add_pet(pet)
+    # Added lowest priority first, so the skipped list has to be sorted.
+    pet.add_task(Task("Bath", 30, "low"))
+    pet.add_task(Task("Morning walk", 10, "high"))
+
+    scheduler = Scheduler(owner)
+    plan = scheduler.generate_plan()
+    explanation = scheduler.explain_plan(plan)
+
+    assert plan == []
+    # Every task is skipped, highest priority first.
+    assert [task.title for task in scheduler.skipped_tasks] == ["Morning walk", "Bath"]
+    assert "No tasks fit in the available time." in explanation
+    assert "Total: 0 of 5 minutes used." in explanation
+
+
+def test_same_priority_shorter_task_goes_first():
+    owner = Owner("Jordan", available_minutes=120)
+    pet = Pet("Mochi", "dog")
+    owner.add_pet(pet)
+    pet.add_task(Task("Morning walk", 30, "high"))
+    pet.add_task(Task("Treat", 1, "medium"))  # shortest overall, but lower priority
+    pet.add_task(Task("Medicine", 5, "high"))
+    pet.add_task(Task("Breakfast", 10, "high"))
+
+    plan = Scheduler(owner).generate_plan()
+
+    # High-priority tasks go shortest first; duration only breaks ties, so Treat is still last.
+    assert [task.title for task in plan] == ["Medicine", "Breakfast", "Morning walk", "Treat"]
+
+
+def test_sort_by_time_with_unpadded_times():
+    scheduler = Scheduler(Owner("Jordan", available_minutes=60))
+    tasks = [
+        Task("Lunch", 10, "high", time="10:00"),
+        Task("Morning walk", 30, "high", time="9:00"),
+        Task("Breakfast", 10, "high", time="8:30"),
+    ]
+
+    sorted_tasks = scheduler.sort_by_time(tasks)
+
+    # As plain text, "10:00" would sort before "9:00". Stored as "09:00", it sorts correctly.
+    assert [task.title for task in sorted_tasks] == ["Breakfast", "Morning walk", "Lunch"]
+    assert [task.time for task in sorted_tasks] == ["08:30", "09:00", "10:00"]
+
+
+def test_same_time_typed_differently_still_conflicts():
+    owner, mochi, luna = make_mochi_and_luna()
+    walk = Task("Morning walk", 30, "high", time="8:00")
+    breakfast = Task("Breakfast", 5, "high", time="08:00")
+    mochi.add_task(walk)
+    luna.add_task(breakfast)
+
+    warnings = Scheduler(owner).find_conflicts()
+
+    assert warnings == [f"Conflict at 08:00 on {walk.due_date}: Morning walk (Mochi), Breakfast (Luna)"]
+
+
+def test_explain_plan_mentions_chosen_and_skipped_tasks():
+    owner = Owner("Jordan", available_minutes=40)
+    pet = Pet("Mochi", "dog")
+    owner.add_pet(pet)
+    pet.add_task(Task("Morning walk", 30, "high"))
+    pet.add_task(Task("Breakfast", 10, "high"))
+    pet.add_task(Task("Bath", 40, "medium"))
+
+    scheduler = Scheduler(owner)
+    plan = scheduler.generate_plan()
+    explanation = scheduler.explain_plan(plan)
+
+    assert "Daily plan for Jordan (40 minutes available):" in explanation
+    assert "1. Breakfast (Mochi) - 10 min, high priority" in explanation
+    assert "2. Morning walk (Mochi) - 30 min, high priority" in explanation
+    assert "Total: 40 of 40 minutes used." in explanation
+    assert "Skipped because there wasn't enough time left:" in explanation
+    assert "- Bath (Mochi) - 40 min, medium priority" in explanation
+    assert "3." not in explanation  # Bath is only listed as skipped, not as part of the plan

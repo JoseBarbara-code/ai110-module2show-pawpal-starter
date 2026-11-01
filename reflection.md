@@ -69,13 +69,16 @@ One thing I had to keep straight is that priority and time do different jobs. Pr
 
 **a. What you tested**
 
-I have 36 pytest tests in tests/test_pawpal.py, and all of them pass. They're grouped by feature:
+I have 42 pytest tests in tests/test_pawpal.py, and all of them pass. They're grouped by feature:
 
 - Basic scheduling (6 tests): mark_complete() and add_task() work, high-priority tasks come first, the plan never goes over the available time, completed tasks are left out, and tasks from more than one pet get collected with the right pet_name.
 - Sorting and times (6 tests): sort_by_time() puts tasks in time order with anytime tasks last and earlier dates first, a time like "8:05" gets stored as "08:05", bad times like "25:00" raise an error, and adding times doesn't change the priority-based plan.
 - Filtering (4 tests): filtering by pet name, by done or not done, by both, and with no filters at all.
 - Recurring tasks (12 tests): daily tasks come back 1 day later and weekly tasks 7 days later (even across the end of a month and year), "once" tasks don't repeat, complete_task() adds the next copy to the pet, completing the same task twice doesn't make a duplicate, late and early completion get the right next date, a bad frequency raises an error, and future tasks stay out of today's plan.
 - Conflict detection (8 tests): two tasks at the same time for the same pet or for different pets, three tasks at one time giving one warning, no false warnings for different times, different dates, tasks without a time, or completed tasks, and checking just a list of tasks I pass in.
+- Edge cases (6 tests): an owner with no pets or a pet with no tasks gets an empty plan and the "No tasks to schedule." message, nothing gets planned when no task fits in the time left, same-priority tasks go shortest first (but a short low-priority task still can't jump ahead of high ones), times like "9:00" and "10:00" sort in the right order, "8:00" and "08:00" still count as a conflict, and explain_plan() lists the chosen tasks, the total time, and the skipped ones.
+
+I added the edge case tests after looking for gaps in my first 36 tests. To make sure they weren't just passing no matter what, I broke the code on purpose in a few ways (like removing the shorter-first tiebreak and turning off the time formatting) and checked that the new tests failed. Then I put the code back and all 42 passed again.
 
 Most of the recurrence tests use fixed dates like date(2026, 11, 1) and pass in the completion date, so they give the same result no matter what day I run them. The few that check today's plan use dates relative to today, since the plan is always for today. I also ran main.py and checked the output by hand.
 
@@ -83,17 +86,16 @@ These tests are important because each one checks a promise the scheduler makes,
 
 **b. Confidence**
 
-I'm pretty confident in the scheduling logic now. All 36 tests pass, they cover every Phase 4 feature, and the main.py output matched what I worked out by hand. I'm less sure about the Streamlit app, because my tests only cover pawpal_system.py and not app.py, and the app doesn't use the new Phase 4 features yet.
+I'd give it 4 out of 5. All 42 tests pass, including the edge cases like an empty schedule and tasks that don't fit, and the main.py output matched what I worked out by hand. So I'm pretty confident in the scheduling logic itself.
 
-There's also a limit I already know about: find_conflicts() only catches tasks with the exact same start time, so overlapping tasks (like a 30-minute walk at 07:30 and training at 07:45) don't get a warning.
+It's not a 5 for two reasons. First, my tests only cover pawpal_system.py, so the Streamlit app hasn't been tested automatically, and it doesn't use the Phase 4 features yet. Second, find_conflicts() only catches tasks with the exact same start time, so overlapping tasks (like a 30-minute walk at 07:30 and training at 07:45) don't get a warning.
 
 If I had more time, I would test:
 
-- An owner with 0 available minutes, or with no pets or tasks
 - Priorities typed differently, like "High" or a typo (right now a typo gets ranked below low instead of causing an error)
 - remove_task() when a pet has both an old completed copy and a new copy of the same recurring task (it removes the first one it finds)
-- The text that explain_plan() returns
-- The Streamlit app itself
+- The Streamlit app itself, using Streamlit's testing tools
+- Overlapping tasks, if I add duration-based conflict detection later
 
 ---
 
