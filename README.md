@@ -44,14 +44,33 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+The demo script `main.py` builds a sample owner with two pets and seven tasks, then prints today's schedule in the terminal (no Streamlit needed):
+
+```bash
+python main.py
+```
+
+Actual output:
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Today's Schedule for Jordan
+Pets: Mochi (dog), Luna (cat)
+Time available: 60 min
+==================================================
+#   Task                Pet      Minutes  Priority
+--------------------------------------------------
+1   Breakfast           Luna           5  high
+2   Breakfast           Mochi         10  high
+3   Morning walk        Mochi         30  high
+4   Brush fur           Luna          10  medium
+--------------------------------------------------
+Time used: 55 min | Time left: 5 min
+Order: highest priority first, shorter tasks first when tied.
+
+Skipped (not enough time left):
+  - Bath (Mochi) - 40 min, medium priority
+  - Fetch in the yard (Mochi) - 15 min, low priority
+  - Laser pointer play (Luna) - 15 min, low priority
 ```
 
 ## 🧪 Testing PawPal+
@@ -64,10 +83,19 @@ pytest
 pytest --cov
 ```
 
-Sample test output:
+Sample test output from `py -m pytest -v` (header lines with local folder paths left out):
 
 ```
-# Paste your pytest output here
+collected 6 items
+
+tests/test_pawpal.py::test_mark_complete_changes_status PASSED           [ 16%]
+tests/test_pawpal.py::test_add_task_increases_pet_task_count PASSED      [ 33%]
+tests/test_pawpal.py::test_high_priority_tasks_come_first PASSED         [ 50%]
+tests/test_pawpal.py::test_plan_fits_in_available_time PASSED            [ 66%]
+tests/test_pawpal.py::test_completed_tasks_are_not_scheduled PASSED      [ 83%]
+tests/test_pawpal.py::test_get_all_tasks_collects_from_every_pet PASSED  [100%]
+
+============================== 6 passed in 0.04s ==============================
 ```
 
 ## 📐 Smarter Scheduling

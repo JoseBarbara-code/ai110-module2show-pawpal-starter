@@ -28,13 +28,24 @@ I also made Pet and Task dataclasses since they mostly just hold data, and kept 
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+My scheduler looks at four things:
+
+- Available time: the owner's available_minutes is a hard limit. The total time of the planned tasks never goes over it.
+- Priority: tasks are sorted high, then medium, then low. priority_rank() turns these into 3, 2, and 1 so they can be sorted.
+- Duration: when two tasks have the same priority, the shorter one goes first so more tasks can fit.
+- Completion: tasks that are already marked complete are left out of the plan.
+
+Owner preferences and task frequency (daily or weekly) are stored, but the scheduler doesn't use them yet. It also doesn't give tasks a time of day yet, so the plan is just an order.
+
+I decided time mattered most because the owner can't do more than they have time for, so the plan has to fit no matter what. After that, priority made the most sense because things like feeding and walks are more important than play time. Duration is only used as a tiebreaker.
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+My scheduler is greedy. It goes down the sorted list once and takes each task that fits in the time left. It doesn't try every combination to find the one that uses the most time. You can see this in my demo: after the high-priority tasks there were 15 minutes left. The scheduler picked Brush fur (medium, 10 min) and then couldn't fit either of the 15-minute low-priority tasks, so 5 minutes went unused. Picking a low-priority task instead would have used all 60 minutes, but then a medium task would have been skipped for a low one.
+
+Another side effect is that when a long task doesn't fit, the scheduler keeps going, so a shorter, lower-priority task can still get in. In one of my tests, Bath (medium, 40 min) gets skipped but Brush fur (low, 10 min) still gets scheduled.
+
+I think this is reasonable for a pet owner because getting the important tasks done matters more than filling every minute. The rules are also simple, so the plan is easy to understand and explain.
 
 ---
 
@@ -56,13 +67,30 @@ I also made Pet and Task dataclasses since they mostly just hold data, and kept 
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+I wrote 6 pytest tests in tests/test_pawpal.py:
+
+1. mark_complete() changes a task's completed value from False to True.
+2. Pet.add_task() increases the number of tasks the pet has.
+3. High-priority tasks come before medium and low ones in the plan. I added them in the opposite order so the scheduler actually had to sort them.
+4. The plan never goes over the owner's available time, and a shorter task can still fit after a longer one is skipped.
+5. Completed tasks are left out of the plan.
+6. Owner.get_all_tasks() collects tasks from more than one pet, and each task has the right pet_name.
+
+All 6 tests pass. I also ran main.py and checked the schedule by hand to make sure the order and the time left were right.
+
+These tests are important because they cover the main things the scheduler is supposed to do: put the most important tasks first, fit in the owner's time, not repeat finished tasks, and not mix up tasks from different pets. While setting up the tests, running plain `pytest` couldn't find pawpal_system.py because the tests are in a subfolder, so I added a small pytest.ini that tells pytest to look in the project folder.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+I'm fairly confident it works for the cases I tested, since all 6 tests pass and the demo output matched what I worked out by hand. But I only have 6 tests and they use small, simple examples, so I wouldn't say it's fully proven yet.
+
+If I had more time, I would test:
+
+- An owner with 0 available minutes, or with no pets or tasks
+- A task that uses up exactly the time that's left
+- Priorities typed differently, like "High" or a typo (right now a typo gets ranked below low instead of causing an error)
+- Removing a task when two tasks have the same title (remove_task only removes the first one)
+- The text that explain_plan() returns
 
 ---
 

@@ -1,5 +1,5 @@
 classDiagram
-    %% PawPal+ initial design draft (Step 3)
+    %% PawPal+ class design (updated in Phase 2 with the logic layer)
     %% Owner has pets, each Pet has care tasks, and the Scheduler
     %% builds a daily plan from the owner's tasks and available time.
 
@@ -25,11 +25,17 @@ classDiagram
         +int duration_minutes
         +str priority
         +str pet_name
+        +str frequency
+        +bool completed
         +priority_rank() int
+        +mark_complete() None
+        +describe() str
     }
 
     class Scheduler {
         +Owner owner
+        +list~Task~ skipped_tasks
+        +sort_by_priority(tasks: list~Task~) list~Task~
         +generate_plan() list~Task~
         +explain_plan(plan: list~Task~) str
     }
